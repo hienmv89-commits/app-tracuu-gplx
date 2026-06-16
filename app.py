@@ -4,12 +4,13 @@ import pytesseract
 from fuzzywuzzy import process, fuzz
 from PIL import Image
 
-# Đọc file dữ liệu câu hỏi
+# 1. Đọc file dữ liệu (Đã thêm khiên bảo vệ strict=False để bỏ qua lỗi ký tự ẩn)
 @st.cache_data
 def load_db():
     with open('data.json', 'r', encoding='utf-8') as f:
-        return json.load(f)
+        return json.load(f, strict=False)
 
+# 2. Hàm đọc chữ từ ảnh
 def scan_image(image_file):
     img = Image.open(image_file).convert('L')
     text = pytesseract.image_to_string(img, lang='vie')
@@ -22,7 +23,7 @@ st.title("🚗 Tra cứu đáp án thi lái xe")
 try:
     db = load_db()
 except Exception as e:
-    st.error("Không tìm thấy hoặc lỗi cấu trúc file data.json.")
+    st.error(f"Dữ liệu đang được tải hoặc có lỗi nhỏ: {e}")
     st.stop()
 
 # Nút bật camera trên điện thoại
@@ -35,8 +36,8 @@ if camera_image is not None:
         if len(scanned_text) < 5:
             st.error("Không đọc được chữ. Vui lòng chụp gần và rõ nét hơn!")
         else:
-            # BẢN NÂNG CẤP: Dò tìm an toàn, bỏ qua các câu bị lỗi cú pháp trong file JSON
-            questions_list = [item['question'] for item in db if isinstance(item, dict) and 'question' in item]
+            # Lọc danh sách câu hỏi an toàn (bỏ qua câu bị thiếu chữ 'question')
+            questions_list = [item.get('question', '') for item in db if isinstance(item, dict) and item.get('question')]
             
             if not questions_list:
                 st.error("Dữ liệu của bạn chưa có câu hỏi nào hợp lệ!")
@@ -49,19 +50,15 @@ if camera_image is not None:
                             st.success("🎉 ĐÃ TÌM THẤY ĐÁP ÁN!")
                             st.write(f"**Câu hỏi nhận diện được:** {item.get('question')}")
                             
-                            # Kiểm tra an toàn cho đáp án
                             correct_ans = item.get('correct_answer')
                             options = item.get('options', [])
                             
-                            if correct_ans and options:
+                            # Hiển thị đáp án an toàn
+                            if correct_ans and isinstance(options, list) and len(options) >= correct_ans:
                                 st.markdown(f"### 👉 ĐÁP ÁN ĐÚNG: Ý SỐ {correct_ans}")
-                                try:
-                                    correct_text = options[correct_ans - 1]
-                                    st.info(f"{correct_text}")
-                                except:
-                                    st.warning("Có lỗi nhỏ khi hiển thị chi tiết đáp án.")
+                                st.info(f"{options[correct_ans - 1]}")
                             else:
-                                st.warning("Câu hỏi này trong dữ liệu của bạn đang bị thiếu đáp án!")
+                                st.markdown(f"### 👉 ĐÁP ÁN ĐÚNG: Ý SỐ {correct_ans}")
                             break
                 else:
                     st.warning("Ảnh chụp bị mờ hoặc câu hỏi chưa có trong cơ sở dữ liệu. Vui lòng thử lại!")
